@@ -1,7 +1,7 @@
-make: socketapp
+make: s-talk
 	
-socketapp: main.o
-	gcc -g -o socketapp list.o main.o
+s-talk: main.o
+	gcc -g -o s-talk list.o main.o
 
 testList: test.o
 	gcc -g -o testList test.o list.o
@@ -11,4 +11,4 @@ test.o: main.o
 
 clean: 
 	rm main.o
-	rm socketapp
+	rm s-talk
