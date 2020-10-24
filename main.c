@@ -3,19 +3,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
+#include <unistd.h>
+#define MAX_THREADS 4
 
-void userInput()
+void *userInput(void *threadID)
 {
     //this should be dynamically allocated eventually using realloc.
-    char message[200];
-    while(1)
-    {
-        scanf("%s", message);
-        if(strlen(message) > 0)
-        {
-            printf("does this work?");
-        }
-    }
+    int* tempId = (int*)threadID;
+    printf("This is thread %d\n", *tempId);
+    sleep(5);
+    printf("Still good :)\n");
+    pthread_exit(NULL);
 }
 
 int main(int argc, char** argv)
@@ -34,10 +32,28 @@ int main(int argc, char** argv)
     else
     {
         printf("Invalid arguments, please supply arguments in this format: s-talk [my port number] [remote machine name] [remote port number]\n");
+        exit(1);
     }
 
-    pthread_t testThread;
-    userInput();
+    pthread_t threads[MAX_THREADS];
+    int temp = 0;
+    int newThread = pthread_create(&threads[temp], NULL, userInput, (void *)&temp);
+
+    char userMessage[1000];
+
+    while(strcmp(userMessage, "!"))
+    {
+        fgets(userMessage, 1000, stdin);
+        int tempLength = strlen(userMessage);
+        if(tempLength > 0 && userMessage[tempLength - 1] == '\n')
+        {
+            userMessage[tempLength - 1] = '\0';
+        }
+        if(strlen(userMessage) > 0)
+        {
+            //printf("%s\n", userMessage);
+        }
+    }
 
     return 0;
 }
