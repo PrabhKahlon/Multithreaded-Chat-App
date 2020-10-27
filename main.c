@@ -23,6 +23,9 @@
 
 List* sendList;
 List* receiveList;
+char* myPort = 0;
+char* remoteMachine;
+char* remotePort = 0;
 
 void* printToScreen()
 {
@@ -71,7 +74,7 @@ void* sendMessage()
     aInfo.ai_socktype = SOCK_DGRAM;
 
     //Get address info and create a socket
-    socketStatus = getaddrinfo("127.0.0.1", "25565", &aInfo, &results);
+    socketStatus = getaddrinfo(remoteMachine, myPort, &aInfo, &results);
     if(socketStatus != 0)
     {
         fprintf(stderr, "Failed to create a socket\n");
@@ -116,7 +119,7 @@ void* receiveMesssage()
     aInfo.ai_socktype = SOCK_DGRAM;
 
     //Get address info, create a socket then bind it.
-    socketStatus = getaddrinfo("127.0.0.1", "25565", &aInfo, &results);
+    socketStatus = getaddrinfo(remoteMachine, remotePort, &aInfo, &results);
     if(socketStatus != 0)
     {
         fprintf(stderr, "Failed to create a socket\n");
@@ -166,16 +169,13 @@ int main(int argc, char** argv)
     //Take in command line arguments in format:
     //s-talk [my port number] [remote machine name] [remote port number]
 
-    int myPort = 0;
-    char* remoteMachine;
-    int remotePort = 0;
     if(argc == 4)
     {
-        int myPort = atoi(argv[1]);
-        char* remoteMachine = argv[2];
-        int remotePort = atoi(argv[3]);
+        myPort = argv[1];
+        remoteMachine = argv[2];
+        remotePort = argv[3];
 
-        printf("My Port: %d, Other Machine Name: %s, Other Port: %d\n", myPort, remoteMachine, remotePort);
+        printf("My Port: %s, Other Machine Name: %s, Other Port: %s\n", myPort, remoteMachine, remotePort);
 
     }
     else
