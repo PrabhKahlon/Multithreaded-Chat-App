@@ -29,6 +29,7 @@ char* remotePort = 0;
 
 //Set up send mutex and receive mutex intializing
 pthread_mutex_t sendMutex = PTHREAD_MUTEX_INITIALIZER;
+//Receive Mutex
 pthread_mutex_t receiveMutex = PTHREAD_MUTEX_INITIALIZER;
 
 
