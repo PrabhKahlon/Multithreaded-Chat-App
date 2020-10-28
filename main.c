@@ -37,6 +37,22 @@ pthread_mutex_t receiveMutex = PTHREAD_MUTEX_INITIALIZER;
 void* printToScreen()
 {
     //this thread will print the message to the screen. Need to implement.
+    
+
+    
+    while(1)
+    {
+        //Lock mutex at receiving list
+        pthread_mutex_lock(&receiveMutex);
+        if (List_count(receiveList) != 0)
+        {
+            //remove the item from the list and print it out
+            fputs((char*)(List_trim(receiveList)), stdout);
+            fputs("\n", stdout);
+        }
+        //unlock the mutex
+        pthread_mutex_unlock(&receiveMutex);
+    }
     pthread_exit(NULL);
 }
 
