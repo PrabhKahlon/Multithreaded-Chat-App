@@ -27,6 +27,12 @@ char* myPort = 0;
 char* remoteMachine;
 char* remotePort = 0;
 
+//Set up send mutex and receive mutex intializing
+pthread_mutex_t sendMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t receiveMutex = PTHREAD_MUTEX_INITIALIZER;
+
+
+
 void* printToScreen()
 {
     //this thread will print the message to the screen. Need to implement.
@@ -39,7 +45,7 @@ void* takeInput()
     //this thread takes input from the user and adds it to the sendList.
 
     char userMessage[1000];
-
+    
     while(strcmp(userMessage, "!"))
     {
         fgets(userMessage, 1000, stdin);
@@ -48,9 +54,14 @@ void* takeInput()
         {
             userMessage[tempLength - 1] = '\0';
         }
+
         if(strlen(userMessage) > 0)
         {
+            //lock and unlock send mutex while taking input 
+            pthread_mutex_lock(&sendMutex);
             List_add(sendList, userMessage);
+            List_add(sendList, "TEST");
+            pthread_mutex_unlock(&sendMutex);
         }
     }
 
@@ -62,6 +73,7 @@ void* takeInput()
 //Receiveing a message is slightly different. Reading this function should give you a good idea about how it works or ignore it idc.
 void* sendMessage()
 {
+    
     //Variables to store socket status and info
     int socketStatus = 0;
     int sendSocket = 0;
@@ -85,23 +97,38 @@ void* sendMessage()
     {
         fprintf(stderr, "Failed to create a socket\n");
         exit(1);
+
     }
 
+
+    while(1) 
+    {
+        if (List_count(sendList) != 0)
+        {
+            printf("%s\n", (char*)(List_trim(sendList)));
+        }
+    }
     //Temporary message to send
     char buf[] = "Hello World!";
 
     //Send the message.
+    //lock the send mutex while sending a message
+    pthread_mutex_lock(&sendMutex);
     int sentMessageSize = sendto(sendSocket, buf, strlen(buf), 0, results->ai_addr, results->ai_addrlen);
     if(sentMessageSize == -1)
     {
         fprintf(stderr, "Failed to send message\n");
         exit(1);
     }
+
     //Free the memory taken by the struct earlier
     freeaddrinfo(results);
+    //unlock mutex after message is sent
+    pthread_mutex_unlock(&sendMutex);
     printf("Message sent from thread\n");
     //Close the socket after all sending is done
     close(sendSocket);
+
     pthread_exit(NULL);
 }
 
@@ -112,7 +139,6 @@ void* receiveMesssage()
     int receiveSocket = 0;
     struct addrinfo aInfo;
     struct addrinfo *results;
-
     //Allocate memory for addrinfo and set up the struct
     memset(&aInfo, 0, sizeof(aInfo));
     aInfo.ai_family = AF_INET;
@@ -137,10 +163,8 @@ void* receiveMesssage()
         fprintf(stderr, "Failed to bind socket\n");
         exit(1);
     }
-    
     //Free the memory taken by the struct earlier
     freeaddrinfo(results);
-
     //Variables needed to receive the message
     struct sockaddr_storage remoteAddress;
     socklen_t addressLength;
@@ -149,20 +173,24 @@ void* receiveMesssage()
     char buf[1000];
 
     //Receive messages from the socket
+    
     addressLength = sizeof(remoteAddress);
     int receiveMessageLength = recvfrom(receiveSocket, buf, 999, 0, (struct sockaddr*)&remoteAddress, &addressLength);
+    
     if(receiveMessageLength == -1)
     {
         fprintf(stderr, "Failed to receive message\n");
         exit(1);
     }
     buf[receiveMessageLength] = '\0';
-    printf("Message received: %s\n", buf);
-
-    //Close the socket after message has been received and exit thread.
+    printf("Message received: %s\n", buf); // removed \n
+    
+    //Close the socket after message has been received and exit- thread.
     close(receiveSocket);
     pthread_exit(NULL);
 }
+
+
 
 int main(int argc, char** argv)
 {
@@ -183,6 +211,14 @@ int main(int argc, char** argv)
         fprintf(stderr, "Invalid arguments, please supply arguments in this format: s-talk [my port number] [remote machine name] [remote port number]\n");
         exit(1);
     }
+
+    //Test to check if Mutex is properly initialized
+    if (pthread_mutex_init(&sendMutex, NULL) != 0 || pthread_mutex_init(&receiveMutex, NULL) != 0) 
+    {
+        fprintf(stderr, "Mutex Not Initialized");
+        return 1;
+    }
+
 
     //Create the sendList. This is useless at the moment.
     sendList = List_create();
