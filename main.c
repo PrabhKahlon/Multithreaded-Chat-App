@@ -137,8 +137,19 @@ void *sendMessage()
         fprintf(stderr, "Failed to get address information\n");
         exit(1);
     }
-    sendSocket = socket(results->ai_family, results->ai_socktype, results->ai_protocol);
-    if (sendSocket == -1)
+    struct addrinfo *i;
+    for (i = results; i != NULL; i = i->ai_next)
+    {
+        sendSocket = socket(i->ai_family, i->ai_socktype, i->ai_protocol);
+        if (sendSocket == -1)
+        {
+            fprintf(stderr, "Failed to create a send socket\n");
+            continue;
+        }
+        break;
+    }
+
+    if(i == NULL)
     {
         fprintf(stderr, "Failed to create a send socket\n");
         exit(1);
@@ -153,7 +164,7 @@ void *sendMessage()
         if (List_count(sendList) > 0)
         {
             char *buffer = (char *)List_trim(sendList);
-            int sentMessageSize = sendto(sendSocket, buffer, strlen(buffer), 0, results->ai_addr, results->ai_addrlen);
+            int sentMessageSize = sendto(sendSocket, buffer, strlen(buffer), 0, i->ai_addr, i->ai_addrlen);
             if (sentMessageSize == -1)
             {
                 fprintf(stderr, "Failed to send message\n");
@@ -197,14 +208,13 @@ void *receiveMesssage()
     struct addrinfo *i;
     for (i = results; i != NULL; i = i->ai_next)
     {
-        receiveSocket = socket(results->ai_family, results->ai_socktype, results->ai_protocol);
+        receiveSocket = socket(i->ai_family, i->ai_socktype, i->ai_protocol);
         if (receiveSocket == -1)
         {
             fprintf(stderr, "Failed to create a receive socket\n");
             continue;
         }
-        printf("%d\n", results->ai_family);
-        int bindStatus = bind(receiveSocket, results->ai_addr, results->ai_addrlen);
+        int bindStatus = bind(receiveSocket, i->ai_addr, i->ai_addrlen);
         if (bindStatus == 0)
         {
             fprintf(stderr, "Success to bind socket\n");
