@@ -194,17 +194,22 @@ void *receiveMesssage()
         fprintf(stderr, "Failed to get address information\n");
         exit(1);
     }
-    receiveSocket = socket(results->ai_family, results->ai_socktype, results->ai_protocol);
-    if (receiveSocket == -1)
+    struct addrinfo *i;
+    for (i = results; i != NULL; i = i->ai_next)
     {
-        fprintf(stderr, "Failed to create a receive socket\n");
-        exit(1);
-    }
-    int bindStatus = bind(receiveSocket, results->ai_addr, results->ai_addrlen);
-    if (bindStatus == -1)
-    {
-        fprintf(stderr, "Failed to bind socket\n");
-        exit(1);
+        receiveSocket = socket(results->ai_family, results->ai_socktype, results->ai_protocol);
+        if (receiveSocket == -1)
+        {
+            fprintf(stderr, "Failed to create a receive socket\n");
+            continue;
+        }
+        int bindStatus = bind(receiveSocket, results->ai_addr, results->ai_addrlen);
+        if (bindStatus == 0)
+        {
+            fprintf(stderr, "Success to bind socket\n");
+            continue;
+        }
+        break;
     }
     //Free the memory taken by the struct earlier
     freeaddrinfo(results);
@@ -242,7 +247,7 @@ void *receiveMesssage()
     pthread_exit(NULL);
 }
 
-void freeList(void* pItem)
+void freeList(void *pItem)
 {
     free(pItem);
 }
@@ -287,7 +292,7 @@ int main(int argc, char **argv)
 
     //wait for threads to finish then exit main and program.
     pthread_join(threads[0], NULL);
-    if(isLocalShutdown)
+    if (isLocalShutdown)
     {
         pthread_join(threads[1], NULL);
         pthread_cancel(threads[2]);
@@ -297,7 +302,7 @@ int main(int argc, char **argv)
         pthread_cancel(threads[1]);
         pthread_join(threads[3], NULL);
     }
-    
+
     pthread_join(threads[3], NULL);
 
     pthread_mutex_destroy(&sendMutex);
