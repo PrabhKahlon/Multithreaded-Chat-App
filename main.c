@@ -15,7 +15,7 @@
 * Name: Prabhjot Kahlon
 * Student Number: 301350905
 * Name: Nathan Kee
-* Student Number:
+* Student Number: 301328767
 * Reference: Beej's guide to network programming, specifically http://beej.us/guide/bgnet/html/#getaddrinfoprepare-to-launch, http://beej.us/guide/bgnet/html/#socket 
 * and http://beej.us/guide/bgnet/html/#sendtorecv. Used these to get a basic understanding of how sockets and udp sendto recvfrom functions work since we've never 
 * done network programming before.
@@ -26,7 +26,8 @@ List *receiveList;
 char *myPort = 0;
 char *remoteMachine;
 char *remotePort = 0;
-bool isShutdown = false;
+bool isLocalShutdown = false;
+bool isRemoteShutdown = false;
 pthread_t threads[MAX_THREADS];
 
 //Send mutex and condition
@@ -37,25 +38,25 @@ pthread_mutex_t receiveMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t receiveCond = PTHREAD_COND_INITIALIZER;
 
 //function to begin shutdown of threads
+// !isLocalShutdown && !isRemoteShutdown
 void shutdownLocal()
 {
-    isShutdown = true;
+    isLocalShutdown = true;
     pthread_cond_signal(&sendCond);
     pthread_cond_signal(&receiveCond);
 }
 
 void shutdownRemote()
 {
-    isShutdown = true;
+    isRemoteShutdown = true;
     pthread_cond_signal(&sendCond);
     pthread_cond_signal(&receiveCond);
-    pthread_cancel(threads[1]);
 }
 
 //this thread will print the message to the screen.
 void *printToScreen()
 {
-    while (!isShutdown)
+    while (!isLocalShutdown && !isRemoteShutdown)
     {
         //Lock mutex at receiving list
         pthread_mutex_lock(&receiveMutex);
@@ -69,15 +70,14 @@ void *printToScreen()
             {
                 fputs(messageToPrint, stdout);
                 fputs("\n", stdout);
-                free(messageToPrint);
                 shutdownRemote();
             }
             else
             {
                 fputs(messageToPrint, stdout);
                 fputs("\n", stdout);
-                free(messageToPrint);
             }
+            free(messageToPrint);
         }
         //unlock the mutex
         pthread_mutex_unlock(&receiveMutex);
@@ -91,7 +91,7 @@ void *takeInput()
 {
     char userMessage[MAX_BUFFER] = "";
 
-    while (strcmp(userMessage, "!") && !isShutdown)
+    while (strcmp(userMessage, "!") && !isLocalShutdown && !isRemoteShutdown)
     {
         fgets(userMessage, MAX_BUFFER, stdin);
         int tempLength = strlen(userMessage);
@@ -146,7 +146,7 @@ void *sendMessage()
 
     //Send the message.
     //lock the send mutex while sending a message
-    while (!isShutdown)
+    while (!isLocalShutdown && !isRemoteShutdown)
     {
         pthread_mutex_lock(&sendMutex);
         pthread_cond_wait(&sendCond, &sendMutex);
@@ -168,7 +168,7 @@ void *sendMessage()
     //Free the memory taken by the struct earlier
     freeaddrinfo(results);
 
-    //Close the socket after all sending is done
+    //Close the socket after all sending is done[]
     close(sendSocket);
 
     pthread_exit(NULL);
@@ -217,7 +217,7 @@ void *receiveMesssage()
 
     //Receive messages from the socket
 
-    while (!isShutdown)
+    while (!isLocalShutdown && !isRemoteShutdown)
     {
         addressLength = sizeof(remoteAddress);
         int receiveMessageLength = recvfrom(receiveSocket, receivedMessage, MAX_BUFFER - 1, 0, (struct sockaddr *)&remoteAddress, &addressLength);
@@ -287,9 +287,21 @@ int main(int argc, char **argv)
 
     //wait for threads to finish then exit main and program.
     pthread_join(threads[0], NULL);
-    pthread_join(threads[1], NULL);
-    pthread_cancel(threads[2]);
+    if(isLocalShutdown)
+    {
+        pthread_join(threads[1], NULL);
+        pthread_cancel(threads[2]);
+    }
+    else
+    {
+        pthread_cancel(threads[1]);
+        pthread_join(threads[3], NULL);
+    }
+    
     pthread_join(threads[3], NULL);
+
+    pthread_mutex_destroy(&sendMutex);
+    pthread_mutex_destroy(&receiveMutex);
 
     List_free(sendList, freeList);
     List_free(receiveList, freeList);

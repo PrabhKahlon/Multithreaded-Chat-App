@@ -2,10 +2,10 @@ make: s-talk
 	
 s-talk: main.o
 	gcc -g -o s-talk list.o main.o -lpthread -Wall
+	rm main.o
 
 main.o:
 	gcc -g -c main.c
 
-clean: 
-	rm main.o
+clean:
 	rm s-talk
