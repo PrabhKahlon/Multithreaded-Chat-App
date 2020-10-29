@@ -188,7 +188,7 @@ void *receiveMesssage()
     aInfo.ai_socktype = SOCK_DGRAM;
 
     //Get address info, create a socket then bind it.
-    socketStatus = getaddrinfo(remoteMachine, remotePort, &aInfo, &results);
+    socketStatus = getaddrinfo(NULL, remotePort, &aInfo, &results);
     if (socketStatus != 0)
     {
         fprintf(stderr, "Failed to get address information\n");
@@ -203,6 +203,7 @@ void *receiveMesssage()
             fprintf(stderr, "Failed to create a receive socket\n");
             continue;
         }
+        printf("%d\n", results->ai_family);
         int bindStatus = bind(receiveSocket, results->ai_addr, results->ai_addrlen);
         if (bindStatus == 0)
         {
