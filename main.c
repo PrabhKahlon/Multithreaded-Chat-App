@@ -197,6 +197,7 @@ void *receiveMesssage()
     memset(&aInfo, 0, sizeof(aInfo));
     aInfo.ai_family = AF_INET;
     aInfo.ai_socktype = SOCK_DGRAM;
+    aInfo.ai_flags = AI_PASSIVE;
 
     //Get address info, create a socket then bind it.
     socketStatus = getaddrinfo(NULL, myPort, &aInfo, &results);
@@ -218,7 +219,6 @@ void *receiveMesssage()
         if (bindStatus == 0)
         {
             fprintf(stderr, "Success to bind socket\n");
-            continue;
         }
         break;
     }
