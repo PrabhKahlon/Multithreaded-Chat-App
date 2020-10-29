@@ -33,6 +33,7 @@ pthread_t threads[MAX_THREADS];
 //Send mutex and condition
 pthread_mutex_t sendMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t sendCond = PTHREAD_COND_INITIALIZER;
+
 //Receive Mutex and condition
 pthread_mutex_t receiveMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t receiveCond = PTHREAD_COND_INITIALIZER;
@@ -46,12 +47,15 @@ void shutdownLocal()
     pthread_cond_signal(&receiveCond);
 }
 
+
+//function to shut down remote
 void shutdownRemote()
 {
     isRemoteShutdown = true;
     pthread_cond_signal(&sendCond);
     pthread_cond_signal(&receiveCond);
 }
+
 
 //this thread will print the message to the screen.
 void *printToScreen()
@@ -60,6 +64,7 @@ void *printToScreen()
     {
         //Lock mutex at receiving list
         pthread_mutex_lock(&receiveMutex);
+        //Wait condition
         pthread_cond_wait(&receiveCond, &receiveMutex);
         if (List_count(receiveList) != 0)
         {
@@ -82,7 +87,7 @@ void *printToScreen()
         //unlock the mutex
         pthread_mutex_unlock(&receiveMutex);
     }
-    printf("exiting print thread\n");
+    //printf("exiting print thread\n");
     pthread_exit(NULL);
 }
 
@@ -95,6 +100,7 @@ void *takeInput()
     {
         fgets(userMessage, MAX_BUFFER, stdin);
         int tempLength = strlen(userMessage);
+
         if (tempLength > 0 && userMessage[tempLength - 1] == '\n')
         {
             userMessage[tempLength - 1] = '\0';
@@ -137,6 +143,8 @@ void *sendMessage()
         fprintf(stderr, "Failed to get address information\n");
         exit(1);
     }
+
+
     struct addrinfo *i;
     for (i = results; i != NULL; i = i->ai_next)
     {
@@ -159,8 +167,10 @@ void *sendMessage()
     //lock the send mutex while sending a message
     while (!isLocalShutdown && !isRemoteShutdown)
     {
+        //Lock and wait condition 
         pthread_mutex_lock(&sendMutex);
         pthread_cond_wait(&sendCond, &sendMutex);
+
         if (List_count(sendList) > 0)
         {
             char *buffer = (char *)List_trim(sendList);
@@ -193,6 +203,8 @@ void *receiveMesssage()
     int receiveSocket = 0;
     struct addrinfo aInfo;
     struct addrinfo *results;
+
+
     //Allocate memory for addrinfo and set up the struct
     memset(&aInfo, 0, sizeof(aInfo));
     aInfo.ai_family = AF_INET;
@@ -206,6 +218,8 @@ void *receiveMesssage()
         fprintf(stderr, "Failed to get address information\n");
         exit(1);
     }
+
+
     struct addrinfo *i;
     for (i = results; i != NULL; i = i->ai_next)
     {
@@ -215,6 +229,7 @@ void *receiveMesssage()
             fprintf(stderr, "Failed to create a receive socket\n");
             continue;
         }
+
         int bindStatus = bind(receiveSocket, i->ai_addr, i->ai_addrlen);
         if (bindStatus == 0)
         {
@@ -224,6 +239,7 @@ void *receiveMesssage()
     }
     //Free the memory taken by the struct earlier
     freeaddrinfo(results);
+
     //Variables needed to receive the message
     struct sockaddr_storage remoteAddress;
     socklen_t addressLength;
@@ -244,6 +260,7 @@ void *receiveMesssage()
             exit(1);
         }
         receivedMessage[receiveMessageLength] = '\0';
+        //lock mutex
         pthread_mutex_lock(&receiveMutex);
         char *receiveBuffer = malloc(sizeof(receivedMessage));
         strcpy(receiveBuffer, receivedMessage);
@@ -276,7 +293,7 @@ int main(int argc, char **argv)
         remotePort = argv[3];
 
         //For testing
-        printf("My Port: %s, Other Machine Name: %s, Other Port: %s\n", myPort, remoteMachine, remotePort);
+        //printf("My Port: %s, Other Machine Name: %s, Other Port: %s\n", myPort, remoteMachine, remotePort);
     }
     else
     {
