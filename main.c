@@ -73,12 +73,14 @@ void *printToScreen()
             //check if it is the shutdown command
             if (strcmp(messageToPrint, "!") == 0)
             {
+                fputs("> ", stdout);
                 fputs(messageToPrint, stdout);
                 fputs("\n", stdout);
                 shutdownRemote();
             }
             else
             {
+                fputs("> ", stdout);
                 fputs(messageToPrint, stdout);
                 fputs("\n", stdout);
             }
