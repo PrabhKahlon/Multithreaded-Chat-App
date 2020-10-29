@@ -1,4 +1,3 @@
-//main.c
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,88 +8,117 @@
 #include <netdb.h>
 #include <unistd.h>
 #define MAX_THREADS 4
+#define MAX_BUFFER 1024
 
 /*
-* Sending and receiving message sent over the network using udp now works. Need to solve the critical section problem.
-*TODO
-*-create mutex to allow only a single read or write operation to each list at one time. (Nathan, try to do this ty :D)
-*-change harcoded values
-*-test
-*PROBLEMS
-*-since we dont have a mutex threads are trying to access the stream at the same time. This sometimes causes the message to not be received unless you type something and press enter.
-* can reproduce this by taking out the newline character from "printf("Message received: %s\n", buf);" on line 157.
+* s-talk
+* Name: Prabhjot Kahlon
+* Student Number: 301350905
+* Name: Nathan Kee
+* Student Number:
+* Reference: Beej's guide to network programming, specifically http://beej.us/guide/bgnet/html/#getaddrinfoprepare-to-launch, http://beej.us/guide/bgnet/html/#socket 
+* and http://beej.us/guide/bgnet/html/#sendtorecv. Used these to get a basic understanding of how sockets and udp sendto recvfrom functions work since we've never 
+* done network programming before.
 */
 
-List* sendList;
-List* receiveList;
-char* myPort = 0;
-char* remoteMachine;
-char* remotePort = 0;
+List *sendList;
+List *receiveList;
+char *myPort = 0;
+char *remoteMachine;
+char *remotePort = 0;
+bool isShutdown = false;
+pthread_t threads[MAX_THREADS];
 
-//Set up send mutex and receive mutex intializing
+//Send mutex and condition
 pthread_mutex_t sendMutex = PTHREAD_MUTEX_INITIALIZER;
-//Receive Mutex
+pthread_cond_t sendCond = PTHREAD_COND_INITIALIZER;
+//Receive Mutex and condition
 pthread_mutex_t receiveMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t receiveCond = PTHREAD_COND_INITIALIZER;
 
-
-
-void* printToScreen()
+//function to begin shutdown of threads
+void shutdownLocal()
 {
-    //this thread will print the message to the screen. Need to implement.
-    
+    isShutdown = true;
+    pthread_cond_signal(&sendCond);
+    pthread_cond_signal(&receiveCond);
+}
 
-    
-    while(1)
+void shutdownRemote()
+{
+    isShutdown = true;
+    pthread_cond_signal(&sendCond);
+    pthread_cond_signal(&receiveCond);
+    pthread_cancel(threads[1]);
+}
+
+//this thread will print the message to the screen.
+void *printToScreen()
+{
+    while (!isShutdown)
     {
         //Lock mutex at receiving list
         pthread_mutex_lock(&receiveMutex);
+        pthread_cond_wait(&receiveCond, &receiveMutex);
         if (List_count(receiveList) != 0)
         {
             //remove the item from the list and print it out
-            fputs((char*)(List_trim(receiveList)), stdout);
-            fputs("\n", stdout);
+            char *messageToPrint = (char *)(List_trim(receiveList));
+            //check if it is the shutdown command
+            if (strcmp(messageToPrint, "!") == 0)
+            {
+                fputs(messageToPrint, stdout);
+                fputs("\n", stdout);
+                free(messageToPrint);
+                shutdownRemote();
+            }
+            else
+            {
+                fputs(messageToPrint, stdout);
+                fputs("\n", stdout);
+                free(messageToPrint);
+            }
         }
         //unlock the mutex
         pthread_mutex_unlock(&receiveMutex);
     }
+    printf("exiting print thread\n");
     pthread_exit(NULL);
 }
 
-void* takeInput()
+//this thread takes input from the user and adds it to the sendList.
+void *takeInput()
 {
+    char userMessage[MAX_BUFFER] = "";
 
-    //this thread takes input from the user and adds it to the sendList.
-
-    char userMessage[1000];
-    
-    while(strcmp(userMessage, "!"))
+    while (strcmp(userMessage, "!") && !isShutdown)
     {
-        fgets(userMessage, 1000, stdin);
+        fgets(userMessage, MAX_BUFFER, stdin);
         int tempLength = strlen(userMessage);
-        if(tempLength > 0 && userMessage[tempLength - 1] == '\n')
+        if (tempLength > 0 && userMessage[tempLength - 1] == '\n')
         {
             userMessage[tempLength - 1] = '\0';
         }
 
-        if(strlen(userMessage) > 0)
+        if (strlen(userMessage) > 0)
         {
-            //lock and unlock send mutex while taking input 
+            //lock and unlock send mutex while taking input
             pthread_mutex_lock(&sendMutex);
-            List_add(sendList, userMessage);
-            List_add(sendList, "TEST");
+            char *sendBuffer = malloc(sizeof(userMessage));
+            strcpy(sendBuffer, userMessage);
+            List_add(sendList, sendBuffer);
+            pthread_cond_signal(&sendCond);
             pthread_mutex_unlock(&sendMutex);
         }
     }
 
+    shutdownLocal();
     pthread_exit(NULL);
 }
 
-//Thread that sends a message. Right now it just sends it to itself but it uses the udp protocol and is over the network. This was aids. :) :) :)
-//Everything is hard coded rn I will change this to work with command line arguments on Sunday or Monday. Should be easy.
-//Receiveing a message is slightly different. Reading this function should give you a good idea about how it works or ignore it idc.
-void* sendMessage()
+//Thread that sends a message.
+void *sendMessage()
 {
-    
     //Variables to store socket status and info
     int socketStatus = 0;
     int sendSocket = 0;
@@ -104,52 +132,50 @@ void* sendMessage()
 
     //Get address info and create a socket
     socketStatus = getaddrinfo(remoteMachine, myPort, &aInfo, &results);
-    if(socketStatus != 0)
+    if (socketStatus != 0)
     {
-        fprintf(stderr, "Failed to create a socket\n");
+        fprintf(stderr, "Failed to get address information\n");
         exit(1);
     }
     sendSocket = socket(results->ai_family, results->ai_socktype, results->ai_protocol);
-    if(sendSocket == -1)
+    if (sendSocket == -1)
     {
-        fprintf(stderr, "Failed to create a socket\n");
+        fprintf(stderr, "Failed to create a send socket\n");
         exit(1);
-
     }
-
-
-    while(1) 
-    {
-        if (List_count(sendList) != 0)
-        {
-            printf("%s\n", (char*)(List_trim(sendList)));
-        }
-    }
-    //Temporary message to send
-    char buf[] = "Hello World!";
 
     //Send the message.
     //lock the send mutex while sending a message
-    pthread_mutex_lock(&sendMutex);
-    int sentMessageSize = sendto(sendSocket, buf, strlen(buf), 0, results->ai_addr, results->ai_addrlen);
-    if(sentMessageSize == -1)
+    while (!isShutdown)
     {
-        fprintf(stderr, "Failed to send message\n");
-        exit(1);
+        pthread_mutex_lock(&sendMutex);
+        pthread_cond_wait(&sendCond, &sendMutex);
+        if (List_count(sendList) > 0)
+        {
+            char *buffer = (char *)List_trim(sendList);
+            int sentMessageSize = sendto(sendSocket, buffer, strlen(buffer), 0, results->ai_addr, results->ai_addrlen);
+            if (sentMessageSize == -1)
+            {
+                fprintf(stderr, "Failed to send message\n");
+                exit(1);
+            }
+            //Free the memory taken up by the buffer.
+            free(buffer);
+        }
+        //unlock mutex after message is sent
+        pthread_mutex_unlock(&sendMutex);
     }
-
     //Free the memory taken by the struct earlier
     freeaddrinfo(results);
-    //unlock mutex after message is sent
-    pthread_mutex_unlock(&sendMutex);
-    printf("Message sent from thread\n");
+
     //Close the socket after all sending is done
     close(sendSocket);
 
     pthread_exit(NULL);
 }
 
-void* receiveMesssage()
+//Thread that receives a message.
+void *receiveMesssage()
 {
     //Variables to store socket status and info
     int socketStatus = 0;
@@ -163,19 +189,19 @@ void* receiveMesssage()
 
     //Get address info, create a socket then bind it.
     socketStatus = getaddrinfo(remoteMachine, remotePort, &aInfo, &results);
-    if(socketStatus != 0)
+    if (socketStatus != 0)
     {
-        fprintf(stderr, "Failed to create a socket\n");
+        fprintf(stderr, "Failed to get address information\n");
         exit(1);
     }
     receiveSocket = socket(results->ai_family, results->ai_socktype, results->ai_protocol);
-    if(receiveSocket == -1)
+    if (receiveSocket == -1)
     {
-        fprintf(stderr, "Failed to create a socket\n");
+        fprintf(stderr, "Failed to create a receive socket\n");
         exit(1);
     }
     int bindStatus = bind(receiveSocket, results->ai_addr, results->ai_addrlen);
-    if(bindStatus == -1)
+    if (bindStatus == -1)
     {
         fprintf(stderr, "Failed to bind socket\n");
         exit(1);
@@ -187,74 +213,86 @@ void* receiveMesssage()
     socklen_t addressLength;
 
     //The buffer for the message to be stored
-    char buf[1000];
+    char receivedMessage[MAX_BUFFER];
 
     //Receive messages from the socket
-    
-    addressLength = sizeof(remoteAddress);
-    int receiveMessageLength = recvfrom(receiveSocket, buf, 999, 0, (struct sockaddr*)&remoteAddress, &addressLength);
-    
-    if(receiveMessageLength == -1)
+
+    while (!isShutdown)
     {
-        fprintf(stderr, "Failed to receive message\n");
-        exit(1);
+        addressLength = sizeof(remoteAddress);
+        int receiveMessageLength = recvfrom(receiveSocket, receivedMessage, MAX_BUFFER - 1, 0, (struct sockaddr *)&remoteAddress, &addressLength);
+
+        if (receiveMessageLength == -1)
+        {
+            fprintf(stderr, "Failed to receive message\n");
+            exit(1);
+        }
+        receivedMessage[receiveMessageLength] = '\0';
+        pthread_mutex_lock(&receiveMutex);
+        char *receiveBuffer = malloc(sizeof(receivedMessage));
+        strcpy(receiveBuffer, receivedMessage);
+        List_add(receiveList, receiveBuffer);
+        pthread_cond_signal(&receiveCond);
+        pthread_mutex_unlock(&receiveMutex);
     }
-    buf[receiveMessageLength] = '\0';
-    printf("Message received: %s\n", buf); // removed \n
-    
+
     //Close the socket after message has been received and exit- thread.
     close(receiveSocket);
+
     pthread_exit(NULL);
 }
 
+void freeList(void* pItem)
+{
+    free(pItem);
+}
 
-
-int main(int argc, char** argv)
+//main
+int main(int argc, char **argv)
 {
     //Take in command line arguments in format:
     //s-talk [my port number] [remote machine name] [remote port number]
 
-    if(argc == 4)
+    if (argc == 4)
     {
         myPort = argv[1];
         remoteMachine = argv[2];
         remotePort = argv[3];
 
+        //For testing
         printf("My Port: %s, Other Machine Name: %s, Other Port: %s\n", myPort, remoteMachine, remotePort);
-
     }
     else
     {
         fprintf(stderr, "Invalid arguments, please supply arguments in this format: s-talk [my port number] [remote machine name] [remote port number]\n");
-        exit(1);
+        return 1;
     }
 
     //Test to check if Mutex is properly initialized
-    if (pthread_mutex_init(&sendMutex, NULL) != 0 || pthread_mutex_init(&receiveMutex, NULL) != 0) 
+    if (pthread_mutex_init(&sendMutex, NULL) != 0 || pthread_mutex_init(&receiveMutex, NULL) != 0)
     {
         fprintf(stderr, "Mutex Not Initialized");
         return 1;
     }
-
 
     //Create the sendList. This is useless at the moment.
     sendList = List_create();
     receiveList = List_create();
 
     //Create the 4 threads needed for the assignment.
-    pthread_t threads[MAX_THREADS];
-    int temp = 0;
-    //int newThread = pthread_create(&threads[temp], NULL, userInput, (void *)&temp);
-    int newThread = pthread_create(&threads[0], NULL, printToScreen, NULL);
-    //printf("%d\n", newThread);
+    int printThread = pthread_create(&threads[0], NULL, printToScreen, NULL);
     int keyboardThread = pthread_create(&threads[1], NULL, takeInput, NULL);
-    //printf("%d\n", keyboardThread);
     int receiveThread = pthread_create(&threads[2], NULL, receiveMesssage, NULL);
-    //printf("%d\n", receiveThread);
     int sendThread = pthread_create(&threads[3], NULL, sendMessage, NULL);
-    //printf("%d\n", sendThread);
 
-    //wait for keyboard thread to finish then exit main and program.
+    //wait for threads to finish then exit main and program.
+    pthread_join(threads[0], NULL);
     pthread_join(threads[1], NULL);
+    pthread_cancel(threads[2]);
+    pthread_join(threads[3], NULL);
+
+    List_free(sendList, freeList);
+    List_free(receiveList, freeList);
+
     return 0;
 }
