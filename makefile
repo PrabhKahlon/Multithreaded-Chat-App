@@ -1,6 +1,6 @@
-make: s-talk
+make: all
 	
-s-talk: main.o
+all: main.o
 	gcc -g -o s-talk list.o main.o -lpthread -Wall
 	rm main.o
 

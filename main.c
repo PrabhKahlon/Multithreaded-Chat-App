@@ -17,7 +17,7 @@
 * Name: Nathan Kee
 * Student Number: 301328767
 * Reference: Beej's guide to network programming, specifically http://beej.us/guide/bgnet/html/#getaddrinfoprepare-to-launch, http://beej.us/guide/bgnet/html/#socket 
-* and http://beej.us/guide/bgnet/html/#sendtorecv. Used these to get a basic understanding of how sockets and udp sendto recvfrom functions work since we've never 
+* and http://beej.us/guide/bgnet/html/#sendtorecv. Used these to get a basic understanding of how sockets, addrinfo and udp sendto recvfrom functions work since we've never 
 * done network programming before.
 */
 
@@ -144,14 +144,14 @@ void *sendMessage()
         exit(1);
     }
 
-
+    //Struct to hold results from addrinfo and go through the linked list without overwriting results
     struct addrinfo *i;
+    //Look for free socket to use
     for (i = results; i != NULL; i = i->ai_next)
     {
         sendSocket = socket(i->ai_family, i->ai_socktype, i->ai_protocol);
         if (sendSocket == -1)
         {
-            fprintf(stderr, "Failed to create a send socket\n");
             continue;
         }
         break;
@@ -201,6 +201,7 @@ void *receiveMesssage()
     //Variables to store socket status and info
     int socketStatus = 0;
     int receiveSocket = 0;
+    int bindStatus = 0;
     struct addrinfo aInfo;
     struct addrinfo *results;
 
@@ -219,23 +220,28 @@ void *receiveMesssage()
         exit(1);
     }
 
-
+    //Struct to hold results from addrinfo and go through the linked list without overwriting results
     struct addrinfo *i;
+    //Look for a free socket and bind to it
     for (i = results; i != NULL; i = i->ai_next)
     {
         receiveSocket = socket(i->ai_family, i->ai_socktype, i->ai_protocol);
         if (receiveSocket == -1)
         {
-            fprintf(stderr, "Failed to create a receive socket\n");
             continue;
         }
 
-        int bindStatus = bind(receiveSocket, i->ai_addr, i->ai_addrlen);
-        if (bindStatus == 0)
+        bindStatus = bind(receiveSocket, i->ai_addr, i->ai_addrlen);
+        if (bindStatus == -1)
         {
-            fprintf(stderr, "Success to bind socket\n");
+            continue;
         }
         break;
+    }
+    if (receiveSocket == -1 || bindStatus == -1)
+    {
+        fprintf(stderr, "Failed to create or bind the receive socket\n");
+        exit(1);
     }
     //Free the memory taken by the struct earlier
     freeaddrinfo(results);
@@ -269,7 +275,7 @@ void *receiveMesssage()
         pthread_mutex_unlock(&receiveMutex);
     }
 
-    //Close the socket after message has been received and exit- thread.
+    //Close the socket after message has been received and exit thread.
     close(receiveSocket);
 
     pthread_exit(NULL);
@@ -333,6 +339,7 @@ int main(int argc, char **argv)
 
     pthread_join(threads[3], NULL);
 
+    //Free the memory taking up by lists nad destroy mutexes
     pthread_mutex_destroy(&sendMutex);
     pthread_mutex_destroy(&receiveMutex);
 
