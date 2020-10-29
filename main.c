@@ -131,7 +131,7 @@ void *sendMessage()
     aInfo.ai_socktype = SOCK_DGRAM;
 
     //Get address info and create a socket
-    socketStatus = getaddrinfo(remoteMachine, myPort, &aInfo, &results);
+    socketStatus = getaddrinfo(remoteMachine, remotePort, &aInfo, &results);
     if (socketStatus != 0)
     {
         fprintf(stderr, "Failed to get address information\n");
@@ -188,7 +188,7 @@ void *receiveMesssage()
     aInfo.ai_socktype = SOCK_DGRAM;
 
     //Get address info, create a socket then bind it.
-    socketStatus = getaddrinfo(NULL, remotePort, &aInfo, &results);
+    socketStatus = getaddrinfo(NULL, myPort, &aInfo, &results);
     if (socketStatus != 0)
     {
         fprintf(stderr, "Failed to get address information\n");
